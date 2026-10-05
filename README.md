@@ -1,2 +1,3 @@
 # learning-go
-Repository for my journey in Golang
+
+Core Go fundamentals, followed by an end-to-end application.
