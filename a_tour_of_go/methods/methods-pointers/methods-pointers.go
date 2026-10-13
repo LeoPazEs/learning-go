@@ -14,6 +14,7 @@ func (v Vertex) Abs() float64 {
 }
 
 func (v *Vertex) Scale(f float64) {
+	// Values in functions are always copies when not pointers
 	v.X = v.X * f
 	v.Y = v.Y * f
 }
