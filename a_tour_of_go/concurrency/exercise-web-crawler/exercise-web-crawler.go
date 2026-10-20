@@ -2,23 +2,25 @@ package main
 
 import (
 	"fmt"
+	"sync"
 )
 
+type SafeCrawled struct {
+	mu   sync.Mutex
+	urls map[string]bool
+}
+
 type Fetcher interface {
-	// Fetch returns the body of URL and
-	// a slice of URLs found on that page.
 	Fetch(url string) (body string, urls []string, err error)
 }
 
-// Crawl uses fetcher to recursively crawl
-// pages starting with url, to a maximum of depth.
-func Crawl(url string, depth int, fetcher Fetcher) {
-	// TODO: Fetch URLs in parallel.
-	// TODO: Don't fetch the same URL twice.
-	// This implementation doesn't do either:
+func Crawl(url string, depth int, fetcher Fetcher, book *SafeCrawled, wg *sync.WaitGroup) {
 	if depth <= 0 {
 		return
 	}
+	book.mu.Lock()
+	book.urls[url] = true
+	book.mu.Unlock()
 	body, urls, err := fetcher.Fetch(url)
 	if err != nil {
 		fmt.Println(err)
@@ -26,16 +28,21 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 	}
 	fmt.Printf("found: %s %q\n", url, body)
 	for _, u := range urls {
-		Crawl(u, depth-1, fetcher)
+		if !book.urls[u] {
+			wg.Go(func() {
+				Crawl(u, depth-1, fetcher, book, wg)
+			})
+		}
 	}
-	return
 }
 
 func main() {
-	Crawl("https://golang.org/", 4, fetcher)
+	book := &SafeCrawled{urls: make(map[string]bool)}
+	var wg sync.WaitGroup
+	Crawl("https://golang.org/", 4, fetcher, book, &wg)
+	wg.Wait()
 }
 
-// fakeFetcher is Fetcher that returns canned results.
 type fakeFetcher map[string]*fakeResult
 
 type fakeResult struct {
@@ -50,7 +57,6 @@ func (f fakeFetcher) Fetch(url string) (string, []string, error) {
 	return "", nil, fmt.Errorf("not found: %s", url)
 }
 
-// fetcher is a populated fakeFetcher.
 var fetcher = fakeFetcher{
 	"https://golang.org/": &fakeResult{
 		"The Go Programming Language",
