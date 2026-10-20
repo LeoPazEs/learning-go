@@ -1,0 +1,18 @@
+name: "mysql-db-golang"
+
+services:
+  mysql-db:
+    image: mysql:9.7
+    container_name: mysql_server
+    environment:
+      MYSQL_ROOT_PASSWORD: ROOT_PASSWORD
+      MYSQL_DATABASE: MY_DATABASE
+      MYSQL_USER: MY_USER
+      MYSQL_PASSWORD: MY_PASSWORD
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
