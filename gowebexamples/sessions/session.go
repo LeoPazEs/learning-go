@@ -3,7 +3,9 @@ package main
 import (
 	"crypto/hmac"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"strings"
@@ -35,8 +37,10 @@ type Session struct {
 }
 
 type (
-	ErrKeySize          []int
-	ErrSessionCookie    bool
+	ErrKeySize       []int
+	ErrSessionCookie struct {
+		err error
+	}
 	ErrInvalidSignature bool
 )
 
@@ -45,20 +49,42 @@ func (e ErrKeySize) Error() string {
 }
 
 func (e ErrSessionCookie) Error() string {
-	return "Invalid cookie format."
+	return fmt.Sprintf("Invalid cookie: %v", e.err)
 }
 
 func (e ErrInvalidSignature) Error() string {
 	return "Invalid signature."
 }
 
+type KeyEncoding int
+
+const (
+	EncodingBase64 KeyEncoding = iota // 0
+	EncodingHex                       // 1
+)
+
 // NewSession creates a new Session with Key and Hash Function.
-func NewSession(key string, hashFunction func() hash.Hash) (*Session, error) {
-	keyByte := []byte(key)
+func NewSession(key string, encoding KeyEncoding, hashFunction func() hash.Hash) (*Session, error) {
+	var rawKey []byte
+	var err error
+
+	switch encoding {
+	case EncodingBase64:
+		rawKey, err = base64.StdEncoding.DecodeString(key)
+	case EncodingHex:
+		rawKey, err = hex.DecodeString(key)
+	default:
+		return nil, fmt.Errorf("unsupported key encoding format")
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode key: %w", err)
+	}
+
 	sizes := [3]int{16, 24, 32}
 	for _, s := range sizes {
-		if len(keyByte) == s {
-			return &Session{keyByte, hashFunction}, nil
+		if len(rawKey) == s {
+			return &Session{rawKey, hashFunction}, nil
 		}
 	}
 	return nil, ErrKeySize(sizes[:])
@@ -84,15 +110,15 @@ func (s *Session) Create(data *SessionData) (string, error) {
 func (s *Session) Check(cookie string) (*SessionData, error) {
 	cookieValues := strings.Split(cookie, ".")
 	if len(cookieValues) != 2 {
-		return nil, ErrSessionCookie(true)
+		return nil, ErrSessionCookie{errors.New("cookie format is invalid")}
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(cookieValues[0])
 	if err != nil {
-		return nil, ErrSessionCookie(true)
+		return nil, ErrSessionCookie{err}
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(cookieValues[1])
 	if err != nil {
-		return nil, ErrSessionCookie(true)
+		return nil, ErrSessionCookie{err}
 	}
 	if !hmac.Equal(signature, s.Signature(payload)) {
 		return nil, ErrInvalidSignature(true)
