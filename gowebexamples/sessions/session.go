@@ -37,16 +37,11 @@ type Session struct {
 }
 
 type (
-	ErrKeySize       []int
 	ErrSessionCookie struct {
 		err error
 	}
 	ErrInvalidSignature bool
 )
-
-func (e ErrKeySize) Error() string {
-	return fmt.Sprintf("Invalid byte size for Key, possible sizes are: %v", []int(e))
-}
 
 func (e ErrSessionCookie) Error() string {
 	return fmt.Sprintf("Invalid cookie: %v", e.err)
@@ -87,7 +82,7 @@ func NewSession(key string, encoding KeyEncoding, hashFunction func() hash.Hash)
 			return &Session{rawKey, hashFunction}, nil
 		}
 	}
-	return nil, ErrKeySize(sizes[:])
+	return nil, fmt.Errorf("invalid byte size for Key, possible sizes are: %v", sizes[:])
 }
 
 func (s *Session) Signature(data []byte) []byte {
